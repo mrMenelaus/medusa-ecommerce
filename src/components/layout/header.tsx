@@ -4,6 +4,7 @@ import { Search, ShoppingCart, User, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Cart } from "../cart/cart";
+import { Suspense } from "react";
 
 const nav = [
   { label: "Shop", href: "/" },
@@ -43,8 +44,9 @@ export function Header() {
             >
               <Search className="h-5 w-5" />
             </Button>
-
-            <Cart />
+            <Suspense>
+              <Cart />
+            </Suspense>
 
             <Button
               size="icon"
@@ -54,11 +56,7 @@ export function Header() {
               <User className="h-5 w-5" />
             </Button>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              className="md:hidden h-10 w-10"
-            >
+            <Button size="icon" variant="ghost" className="md:hidden h-10 w-10">
               <Menu className="h-5 w-5" />
             </Button>
           </div>
@@ -90,7 +88,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
       className={cn(
         "text-sm font-medium text-muted-foreground hover:text-foreground transition-colors relative",
         "after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-primary",
-        "after:transition-all after:duration-300 hover:after:w-full"
+        "after:transition-all after:duration-300 hover:after:w-full",
       )}
     >
       {label}

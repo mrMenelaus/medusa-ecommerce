@@ -25,7 +25,7 @@ export function SelectVariant({ product }: { product: StoreProduct }) {
   );
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <FieldGroup>
         {product.options?.map((option) => (
           <FieldSet key={option.id}>
@@ -55,6 +55,6 @@ export function SelectVariant({ product }: { product: StoreProduct }) {
         ))}
       </FieldGroup>
       <AddButton variant={selectedVariant} />
-    </>
+    </div>
   );
 }

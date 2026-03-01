@@ -46,9 +46,7 @@ export default function SearchProducts(props: PageProps<"/search">) {
 async function SearchInput({
   searchPromise,
 }: {
-  searchPromise: Promise<{
-    search: string;
-  }>;
+  searchPromise: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { search } = await searchPromise;
   return (
@@ -76,19 +74,15 @@ async function CategoryFilter() {
 async function ProductList({
   searchPromise,
 }: {
-  searchPromise: Promise<{
-    page: number;
-    search: string;
-    categories: string[];
-  }>;
+  searchPromise: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { categories, page = 0, search } = await searchPromise;
   const limit = 10;
   const { products } = await medusa.store.product.list({
     // category_id: categories,
     limit,
-    offset: limit * page,
-    q:search
+    offset: limit * Number(page),
+    q: search as string
   });
 
   console.log(search);

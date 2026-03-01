@@ -45,7 +45,7 @@ export default async function ProductDetails({
       {/* Product Detail Section */}
       <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
         {/* Gallery */}
-        <div className="sticky top-24">
+        <div>
           <Gallery images={product.images} />
         </div>
 

@@ -1,67 +1,91 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getCartAction,
-  addToCartAction,
-  updateCartItemAction,
-  removeFromCartAction,
-} from "@/app/actions/cart";
+import { medusa } from "@/lib/medusa";
+import { useRegion } from "../region/region-provider";
+import { StoreCart, StoreProductVariant } from "@medusajs/types";
 
-const keys = { cart: ["cart"] } as const;
+export const keys = { cart: ["cart"] } as const;
 
-/**
- * Hook to get cart data
- * Uses server action to fetch cart from cookies
- */
 export function useCart() {
+  const { region } = useRegion();
   return useQuery({
     queryKey: keys.cart,
     queryFn: async () => {
-      const result = await getCartAction();
-      if (result.success && result.cart) {
-        return result.cart;
+      const cartId = localStorage.getItem("cartId");
+      if (cartId) {
+        const response = await medusa.store.cart.retrieve(cartId);
+        return response.cart;
       }
-      return null;
+      const response = await medusa.store.cart.create({ region_id: region.id });
+      localStorage.setItem("cartId", response.cart.id);
+      return response.cart;
     },
-    staleTime: 0, // Always refetch to get latest cart state
-  });
+  })
 }
 
-/**
- * Hook to add item to cart
- * Uses server action which handles cookie management
- */
 export function useAddToCart() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (variantId: string) => {
-      const result = await addToCartAction(variantId);
-      if (!result.success) {
-        throw new Error(result.error || "Failed to add to cart");
-      }
+    mutationKey: keys.cart,
+    mutationFn: async (variant: StoreProductVariant) => {
+      const cartId = localStorage.getItem("cartId");
+      if (!cartId) return;
+      return medusa.store.cart.createLineItem(cartId, {
+        quantity: 1,
+        variant_id: variant.id,
+      });
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: keys.cart });
+    onMutate: (variant) => {
+      queryClient.cancelQueries({ queryKey: keys.cart });
+      const snapshot = queryClient.getQueryData(keys.cart);
+      queryClient.setQueryData(
+        keys.cart,
+        (data: StoreCart) =>
+          data && {
+            ...data,
+            items: data.items ? [variant, ...data.items] : [variant],
+          },
+      );
+      return snapshot;
+    },
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: keys.cart }) === 1) {
+        queryClient.invalidateQueries({ queryKey: keys.cart });
+      }
     },
   });
 }
 
-/**
- * Hook to update cart item quantity
- * Uses server action which handles cookie management
- */
-export function useUpdateCart() {
+export function useUpdateCart(lineId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (variables: { lineId: string; quantity: number }) => {
-      const result = await updateCartItemAction(variables.lineId, variables.quantity);
-      if (!result.success) {
-        throw new Error(result.error || "Failed to update cart");
-      }
+    mutationKey: keys.cart,
+    mutationFn: async (quantity: number) => {
+      const cartId = localStorage.getItem("cartId");
+      if (!cartId) return;
+      return medusa.store.cart.updateLineItem(cartId, lineId, { quantity });
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: keys.cart });
+    onMutate: async (quantity) => {
+      await queryClient.cancelQueries({ queryKey: keys.cart });
+      queryClient.setQueryData(
+        keys.cart,
+        (data: StoreCart) =>
+          data && {
+            ...data,
+            items: data.items?.map((line) =>
+              line.id === lineId ? { ...line, quantity } : line,
+            ),
+          },
+      );
+    },
+    onSettled: () => {
+
+      if (queryClient.isMutating({ mutationKey: keys.cart }) === 1) {
+        console.log("invalidated update quantity");
+        
+        queryClient.invalidateQueries({ queryKey: keys.cart });
+      }
     },
   });
 }
@@ -74,14 +98,31 @@ export function useRemoveFromCart() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: keys.cart,
     mutationFn: async (lineId: string) => {
-      const result = await removeFromCartAction(lineId);
-      if (!result.success) {
-        throw new Error(result.error || "Failed to remove from cart");
-      }
+      const cartId = localStorage.getItem("cartId");
+      if (!cartId) return;
+      return medusa.store.cart.deleteLineItem(cartId, lineId);
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: keys.cart });
+    onMutate: (lineId) => {
+      queryClient.cancelQueries({ queryKey: keys.cart });
+      const snapshot = queryClient.getQueryData(keys.cart);
+      queryClient.setQueryData(
+        keys.cart,
+        (data: StoreCart) =>
+          data && {
+            ...data,
+            items: data.items?.filter((line) => line.id !== lineId),
+          },
+      );
+      return snapshot;
+    },
+    onSettled: () => {
+
+      if (queryClient.isMutating({ mutationKey: keys.cart }) === 1) {
+        console.log("invalidated from remove");
+        queryClient.invalidateQueries({ queryKey: keys.cart });
+      }
     },
   });
 }

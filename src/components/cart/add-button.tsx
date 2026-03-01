@@ -19,7 +19,7 @@ export function AddButton({
     <Button
       size="lg"
       disabled={!variant}
-      onClick={() => variant && addToCart(variant.id)}
+      onClick={() => variant && addToCart(variant)}
     >
       <ShoppingCart />
       Add to Cart

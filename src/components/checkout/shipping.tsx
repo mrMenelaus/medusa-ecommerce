@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import {
   Field,
   FieldContent,
@@ -13,100 +12,95 @@ import {
 } from "../ui/field";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Button } from "../ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { medusa } from "@/lib/medusa";
 import { Skeleton } from "../ui/skeleton";
-import { useState, useEffect } from "react";
-import { useCart } from "../cart/cart-actions";
-import { addShippingMethodAction, getShippingOptionsAction } from "@/app/actions/cart";
+import { useRouter } from "next/navigation";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { StoreCart } from "@medusajs/types";
 
-export function Shipping() {
-  const { data: cart } = useCart();
-  const [selectedShipping, setSelectedShipping] = useState<string | null>(null);
-  
-  // Pre-select existing shipping method
-  useEffect(() => {
-    if (cart?.shipping_methods?.[0]?.shipping_option_id) {
-      setSelectedShipping(cart.shipping_methods[0].shipping_option_id);
-    }
-  }, [cart]);
+const shippingSchema = z.object({
+  method: z.string(),
+});
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedShipping) return;
-    try {
-      const result = await addShippingMethodAction(selectedShipping);
-      if (result.success) {
-        // Refresh page to update cart summary and enable next section
-        window.location.reload();
-      } else {
-        console.error("Failed to save shipping method:", result.error);
-        // TODO: Add proper error toast/notification
-      }
-    } catch (error) {
-      console.error("Failed to save shipping method:", error);
-      // TODO: Add proper error toast/notification
-    }
-  }
+export function Shipping({ cart }: { cart: StoreCart }) {
+  const router = useRouter();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["shipping"],
-    queryFn: async () => {
-      const result = await getShippingOptionsAction();
-      if (!result.success || !result.shipping_options) {
-        throw new Error(result.error || "Failed to load shipping options");
-      }
-      return { shipping_options: result.shipping_options };
+  const form = useForm<z.infer<typeof shippingSchema>>({
+    resolver: zodResolver(shippingSchema),
+    defaultValues: {
+      method: undefined,
     },
   });
 
+  const { data: methods, isLoading } = useQuery({
+    queryKey: ["shipping"],
+    queryFn: async () => {
+      const cartId = localStorage.getItem("cartId");
+      if (!cartId) return null;
+      return medusa.store.fulfillment.listCartOptions({ cart_id: cartId });
+    },
+  });
+
+  async function onSubmit({ method }: { method: string }) {
+    const cartId = localStorage.getItem("cartId");
+    if (!cartId) return;
+    await medusa.store.cart.addShippingMethod(cartId, {
+      option_id: method,
+    });
+    router.push("?stage=payment")
+  }
+
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16" />
-      </div>
+      <>
+        <Skeleton className="w-full h-8 mb-4" />
+        <Skeleton className="w-full h-4 mb-2" />
+        <Skeleton className="w-full h-4 mb-2" />
+        <Skeleton className="w-full h-4 mb-2" />
+        <Skeleton className="w-full h-4 mb-2" />
+      </>
     );
   }
 
   return (
-    <>
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl leading-none font-medium mb-4">
-          Shipping Options
-        </h1>
-      </div>
-      <form className="flex flex-col gap-2" onSubmit={handleSave}>
-        <FieldSet>
-          <FieldLegend>Shipping</FieldLegend>
-          <FieldGroup>
-            <RadioGroup
-              value={selectedShipping}
-              onValueChange={setSelectedShipping}
-            >
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {data?.shipping_options.map((value) => (
-                  <FieldLabel htmlFor={value.id} key={value.id}>
-                    <Field orientation="horizontal">
-                      <FieldContent>
-                        <FieldTitle>{value.type.label}</FieldTitle>
-                        <FieldDescription>
-                          {value.type.description}
-                        </FieldDescription>
-                        <FieldDescription>
-                          {value.calculated_price.calculated_amount}
-                        </FieldDescription>
-                      </FieldContent>
-                      <RadioGroupItem value={value.id} id={value.id} />
-                    </Field>
-                  </FieldLabel>
-                ))}
-              </div>
-            </RadioGroup>
-          </FieldGroup>
-        </FieldSet>
-        <Button className="self-start" type="submit" disabled={!selectedShipping}>
-          {cart?.shipping_methods?.[0]?.shipping_option_id === selectedShipping ? "Update Shipping" : "Save Shipping"}
-        </Button>
-      </form>
-    </>
+    <form className="space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
+      <FieldSet>
+        <FieldLegend>Available options</FieldLegend>
+        <FieldGroup>
+          <Controller
+            control={form.control}
+            name="method"
+            render={({ field }) => (
+              <RadioGroup value={field.value} onValueChange={field.onChange}>
+                <div className="grid grid-cols-2 gap-2">
+                  {methods?.shipping_options.map((value) => (
+                    <FieldLabel htmlFor={value.id} key={value.id}>
+                      <Field orientation="horizontal">
+                        <FieldContent>
+                          <FieldTitle>{value.type.label}</FieldTitle>
+                          <FieldDescription>
+                            {value.type.description}
+                          </FieldDescription>
+                          <FieldDescription>
+                            {value.calculated_price.calculated_amount}
+                          </FieldDescription>
+                        </FieldContent>
+                        <RadioGroupItem value={value.id} id={value.id} />
+                      </Field>
+                    </FieldLabel>
+                  ))}
+                </div>
+              </RadioGroup>
+            )}
+          />
+        </FieldGroup>
+      </FieldSet>
+      <Button type="submit" size="lg">
+        Continue to payment
+      </Button>
+    </form>
   );
 }

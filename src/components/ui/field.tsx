@@ -82,9 +82,10 @@ function Field({
   className,
   orientation = "vertical",
   ...props
-}: React.ComponentProps<"fieldset"> & VariantProps<typeof fieldVariants>) {
+}: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
   return (
-    <fieldset
+    <div
+      role="group"
       data-slot="field"
       data-orientation={orientation}
       className={cn(fieldVariants({ orientation }), className)}
@@ -188,7 +189,7 @@ function FieldError({
   errors,
   ...props
 }: React.ComponentProps<"div"> & {
-  errors?: Array< string | undefined>
+  errors?: Array<{ message?: string } | undefined>
 }) {
   const content = useMemo(() => {
     if (children) {
@@ -199,15 +200,19 @@ function FieldError({
       return null
     }
 
-    if (errors?.length === 1) {
-      return errors[0]
+    const uniqueErrors = [
+      ...new Map(errors.map((error) => [error?.message, error])).values(),
+    ]
+
+    if (uniqueErrors?.length == 1) {
+      return uniqueErrors[0]?.message
     }
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {errors.map(
+        {uniqueErrors.map(
           (error, index) =>
-            error && <li key={error}>{error}</li>
+            error?.message && <li key={index}>{error.message}</li>
         )}
       </ul>
     )

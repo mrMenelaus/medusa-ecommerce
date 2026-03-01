@@ -1,45 +1,47 @@
-"use client"
+"use client";
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect } from "react"
-import { useCart } from "../cart/cart-actions"
+import { Email } from "./email";
+import { Address } from "./address";
+import { Shipping } from "./shipping";
+import { Payment } from "./payment";
+import { useSearchParams } from "next/navigation";
+import { Separator } from "../ui/separator";
+import { useCart } from "../cart/cart-actions";
+import { Empty, EmptyTitle } from "../ui/empty";
+import { Skeleton } from "../ui/skeleton";
 
-type ActiveTab = "address" | "shipping" | "payment"
+export function CheckoutRouter() {
+  const searchParams = useSearchParams();
+  const stage = searchParams.get("stage");
+  const { isLoading, isSuccess, data: cart } = useCart();
 
-type RouterProps = {
-  handle: string
-}
+  if (isLoading) {
+    return <div className="flex-1 flex flex-col gap-8"> 
+      <Skeleton />
+    </div>
+  }
 
-export const Router = ({
-  handle,
-}: RouterProps) => {
-  const { data: cart } = useCart()
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const currentStep = searchParams.get("step")
-
-  const activeTab: ActiveTab = currentStep === "address" || 
-    currentStep === "shipping" || currentStep === "payment" ? currentStep : "address"
-
-  useEffect(() => {
-    if (!cart) {
-      return
-    }
-    
-    if (activeTab === "shipping" && (!cart?.shipping_address || !cart?.billing_address)) {
-      return router.push(`/checkout?step=address`)
-    }
-  
-    if (activeTab === "payment" && (
-      !cart?.shipping_address || !cart?.billing_address || !cart?.shipping_methods?.length
-    )) {
-      return router.push(`/checkout?step=shipping`)
-    }
-  }, [cart, activeTab, router.push])
+  if (isSuccess) {
+    return (
+      <div className="flex-1 flex flex-col gap-8">
+        <div className="font-bold text-xl">Contact information</div>
+        {stage === "email" && <Email cart={cart} />}
+        <Separator />
+        <div className="font-bold text-xl">Address</div>
+        {stage === "address" && <Address cart={cart} />}
+        <Separator />
+        <div className="font-bold text-xl">Shipping</div>
+        {stage === "shipping" && <Shipping cart={cart} />}
+        <Separator />
+        <div className="font-bold text-xl">Payment</div>
+        {stage === "payment" && <Payment cart={cart} />}
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* TODO render components */}
-    </>
-  )
+    <Empty>
+      <EmptyTitle>Something went wrong</EmptyTitle>
+    </Empty>
+  );
 }

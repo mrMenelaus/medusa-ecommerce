@@ -3,6 +3,9 @@
 import { useActionState } from "react";
 import {
   Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
@@ -18,107 +21,240 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Button } from "../ui/button";
-import { updateCartAddressAction } from "@/app/actions/cart";
-import { TextField } from "../form/text-field";
-import type { StoreCart } from "@medusajs/types";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRegion } from "../region/region-provider";
+import { medusa } from "@/lib/medusa";
+import { Input } from "../ui/input";
+import { useRouter } from "next/navigation";
+import { StoreCart } from "@medusajs/types";
+
+const addressSchema = z.object({
+  country_code: z.string(),
+  phone: z.e164(),
+  address_1: z.string(),
+  address_2: z.string(),
+  city: z.string(),
+  company: z.string(),
+  first_name: z.string(),
+  last_name: z.string(),
+  postal_code: z.string(),
+  province: z.string(),
+});
 
 export function Address({ cart }: { cart: StoreCart }) {
-  const [state, formAction, isPending] = useActionState(
-    updateCartAddressAction,
-    null,
-  );
+  const router = useRouter();
+
+  const { region } = useRegion();
+  const form = useForm<z.infer<typeof addressSchema>>({
+    defaultValues: {
+      country_code: undefined,
+      phone: "",
+      address_1: "",
+      city: "",
+      company: "",
+      first_name: "",
+      last_name: "",
+      postal_code: "",
+      province: "",
+      ...cart?.billing_address,
+    },
+    resolver: zodResolver(addressSchema),
+  });
+
+  async function onSubmit(address: z.infer<typeof addressSchema>) {
+    const cartId = localStorage.getItem("cartId");
+    if (!cartId) return;
+    await medusa.store.cart.update(cartId, {
+      shipping_address: address,
+      billing_address: address,
+    });
+    router.push(`?stage=shipping`);
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form className="space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
       <FieldSet>
-        <FieldLegend>Адрес доставки</FieldLegend>
+        <FieldLegend>Delivery address</FieldLegend>
+        <FieldDescription>
+          We need to know your address to deliver products
+        </FieldDescription>
         <FieldGroup className="grid md:grid-cols-2 gap-4">
-          <Field>
-            <FieldLabel htmlFor="country_code">Страна</FieldLabel>
-            <Select aria-invalid={state?.errors?.country_code}>
-              <SelectTrigger id="country_code" name="country_code">
-                <SelectValue placeholder="Выберите страну..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Countries</SelectLabel>
-                  {cart?.region?.countries?.map((country) => (
-                    <SelectItem
-                      key={country.iso_2}
-                      value={country.iso_2 || "fallback"}
-                    >
-                      {country.display_name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <TextField
-            defaultValue={state?.data?.province}
-            name="province"
-            title="Регион, область"
-            placeholder="Свердловская область"
-            errors={state?.errors?.province}
+          <Controller
+            control={form.control}
+            name="country_code"
+            render={({ fieldState, field }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldContent>
+                  <FieldLabel htmlFor="form-rhf-select-language">
+                    Country
+                  </FieldLabel>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </FieldContent>
+                <Select
+                  name={field.name}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger
+                    id="form-rhf-select-language"
+                    aria-invalid={fieldState.invalid}
+                  >
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent position="item-aligned">
+                    {region.countries?.map((country) => (
+                      <SelectItem
+                        value={country.iso_2 as string}
+                        key={country.iso_2}
+                      >
+                        {country.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           />
-          <TextField
-            defaultValue={state?.data?.city}
-            name="city"
-            title="Город (населённый пункт)"
-            placeholder="Новомосковск"
-            required
-            errors={state?.errors?.city}
-          />
-          <TextField
-            defaultValue={state?.data?.address_1}
+          <Controller
             name="address_1"
-            title="Адрес"
-            placeholder="ул. Максима Горького, д. 10 кв.133"
-            required
-            errors={state?.errors?.address_1}
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>Address 1</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="Street address"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
           />
-          <TextField
-            defaultValue={state?.data?.postal_code}
-            name="postal_code"
-            title="Почтовый индекс"
-            placeholder="392000"
-            required
-            errors={state?.errors?.postal_code}
+          <Controller
+            name="city"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>City</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="City"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
           />
-          <TextField
-            defaultValue={state?.data?.company}
-            name="company"
-            title="Компания"
-            placeholder="Тинькофф"
-            errors={state?.errors?.company}
-          />
-          <TextField
-            defaultValue={state?.data?.first_name}
-            name="first_name"
-            title="Имя"
-            placeholder="Иван"
-            required
-            errors={state?.errors?.first_name}
-          />
-          <TextField
-            defaultValue={state?.data?.last_name}
-            name="last_name"
-            title="Фамилия"
-            placeholder="Иванов"
-            errors={state?.errors?.last_name}
-          />
-          <TextField
-            defaultValue={state?.data?.phone}
-            name="phone"
-            title="Номер телефона"
-            placeholder="+79998880808"
-            type="tel"
-            errors={state?.errors?.phone}
+          <Controller
+            name="province"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>Province</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="Province/State"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
           />
         </FieldGroup>
       </FieldSet>
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Сохранение..." : "Save Address"}
+      <FieldSet>
+        <FieldLegend>Personal information</FieldLegend>
+        <FieldDescription>We need to know you</FieldDescription>
+        <FieldGroup className="grid md:grid-cols-2 gap-4">
+          <Controller
+            name="first_name"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>First Name</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="First name"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="last_name"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>Last Name</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="Last name"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="phone"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>Phone</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="Phone number"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="company"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>Company</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="Company (optional)"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+        </FieldGroup>
+      </FieldSet>
+      <Button type="submit" size="lg">
+        Continue to shipping
       </Button>
     </form>
   );
